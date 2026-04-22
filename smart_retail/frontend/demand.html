@@ -1,0 +1,449 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory & Demand — RetailPro Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">🛒</div>
+    <span>RetailPro</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+    <a href="sales.html" class="nav-link"><span class="nav-icon">💰</span> Sales</a>
+    <div class="nav-section-label">Operations</div>
+    <a href="demand.html" class="nav-link active"><span class="nav-icon">📦</span> Inventory</a>
+    <a href="fraud.html" class="nav-link"><span class="nav-icon">🚨</span> Fraud
+      <span class="nav-badge" id="fraud-nav-badge" style="display:none">!</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="db-status">
+      <div class="db-dot" id="db-dot"></div>
+      <span id="db-text">Checking...</span>
+    </div>
+  </div>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger">☰</button>
+      <span class="topbar-title">Inventory & Demand</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" onclick="openAddProductModal()">
+        <span>➕</span><span>Add Product</span>
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openRestockModal()">
+        <span>📦</span><span>Restock</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h1>📦 Inventory & Demand Forecast</h1>
+      <p class="subtitle">Manage stock levels and view demand predictions</p>
+    </div>
+
+    <!-- Low stock alert banner -->
+    <div id="low-stock-banner" style="display:none"></div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select id="filter-category" class="form-control" onchange="filterProducts()">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Search Product</label>
+        <input type="text" id="filter-search" class="form-control" placeholder="Product name..." oninput="filterProducts()" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Demand Forecast For</label>
+        <select id="filter-product" class="form-control">
+          <option value="">All Products</option>
+        </select>
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label class="form-label">&nbsp;</label>
+        <button class="btn btn-primary" onclick="loadDemand()">📈 Run Forecast</button>
+      </div>
+    </div>
+
+    <!-- Products Table -->
+    <div class="card mb-2">
+      <div class="card-header">
+        <div class="card-title">🏷️ Products & Stock Levels</div>
+        <span class="text-muted" id="products-count" style="font-size:0.8rem"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="products-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Product</th>
+              <th>Category</th>
+              <th class="text-right">Price</th>
+              <th class="text-right">Stock</th>
+              <th class="text-right">Reorder At</th>
+              <th style="min-width:120px">Stock Level</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Demand Forecast Table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📈 Demand Forecast</div>
+        <span class="text-muted" id="forecast-count" style="font-size:0.8rem"></span>
+      </div>
+      <div id="forecast-chart-wrap" style="display:none" class="mb-2">
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="forecastChart"></canvas>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="forecast-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th>Forecast Date</th>
+              <th class="text-right">Predicted</th>
+              <th class="text-right">Actual</th>
+              <th class="text-right">Accuracy</th>
+              <th class="text-right">Stock</th>
+              <th class="text-right">Reorder At</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="forecast-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="static/script.js"></script>
+<script>
+let forecastChart;
+let allProducts = [];
+
+async function loadProducts() {
+  showSkeleton("products-body", 9, 6);
+  try {
+    allProducts = await apiFetch("/products");
+    populateCategoryFilter();
+    renderProducts(allProducts);
+
+    // Low stock banner
+    const lowStock = allProducts.filter(p => p.low_stock || p.stock_quantity <= p.reorder_level);
+    const outOfStock = allProducts.filter(p => p.stock_quantity === 0);
+    const banner = document.getElementById("low-stock-banner");
+    if (outOfStock.length > 0) {
+      banner.style.display = "block";
+      banner.innerHTML = `<div class="alert alert-danger">
+        <span class="alert-icon">🚨</span>
+        <div class="alert-body">
+          <div class="alert-title">${outOfStock.length} product(s) OUT OF STOCK!</div>
+          <div>${outOfStock.map(p => p.product_name).join(", ")}</div>
+        </div>
+      </div>`;
+    } else if (lowStock.length > 0) {
+      banner.style.display = "block";
+      banner.innerHTML = `<div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-body">
+          <div class="alert-title">${lowStock.length} product(s) running low on stock</div>
+          <div>${lowStock.map(p => p.product_name).join(", ")}</div>
+        </div>
+      </div>`;
+    } else {
+      banner.style.display = "none";
+    }
+  } catch (e) {
+    showToast("Failed to load products: " + e.message, "error");
+  }
+}
+
+function populateCategoryFilter() {
+  const cats = [...new Set(allProducts.map(p => p.category_name))].sort();
+  const sel = document.getElementById("filter-category");
+  sel.innerHTML = '<option value="">All Categories</option>' +
+    cats.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
+function filterProducts() {
+  const cat = document.getElementById("filter-category").value;
+  const q   = document.getElementById("filter-search").value.toLowerCase();
+  const filtered = allProducts.filter(p =>
+    (!cat || p.category_name === cat) &&
+    (!q   || p.product_name.toLowerCase().includes(q))
+  );
+  renderProducts(filtered);
+}
+
+function renderProducts(products) {
+  document.getElementById("products-count").textContent = products.length + " products";
+  const tbody = document.getElementById("products-body");
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">📦</div><p>No products found</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = products.map(p => {
+    const pct = p.reorder_level > 0 ? Math.min(100, Math.round((p.stock_quantity / (p.reorder_level * 3)) * 100)) : 100;
+    const barClass = p.stock_quantity === 0 ? "danger" : p.stock_quantity <= p.reorder_level ? "warning" : "success";
+    const statusBadgeHtml = p.stock_quantity === 0
+      ? '<span class="badge badge-critical">Out of Stock</span>'
+      : (p.low_stock || p.stock_quantity <= p.reorder_level)
+        ? '<span class="badge badge-high">Low Stock</span>'
+        : '<span class="badge badge-success">In Stock</span>';
+    return `<tr id="prod-row-${p.product_id}">
+      <td class="text-muted">#${p.product_id}</td>
+      <td class="fw-bold" id="prod-name-${p.product_id}">${p.product_name}</td>
+      <td class="text-muted">${p.category_name}</td>
+      <td class="text-right" id="prod-price-${p.product_id}">${formatCurrency(p.price)}</td>
+      <td class="text-right fw-bold ${p.stock_quantity === 0 ? 'text-red' : p.stock_quantity <= p.reorder_level ? 'text-amber' : ''}" id="prod-stock-${p.product_id}">${p.stock_quantity}</td>
+      <td class="text-right text-muted" id="prod-reorder-${p.product_id}">${p.reorder_level}</td>
+      <td>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill ${barClass}" style="width:${pct}%"></div>
+        </div>
+      </td>
+      <td>${statusBadgeHtml}</td>
+      <td>
+        <div style="display:flex;gap:0.25rem">
+          <button class="btn btn-ghost btn-sm btn-icon" title="Edit" onclick="startInlineEdit(${p.product_id}, ${p.price}, ${p.stock_quantity}, ${p.reorder_level})">✏️</button>
+          <button class="btn btn-ghost btn-sm btn-icon" title="Restock" onclick="openRestockModal(${p.product_id}, '${p.product_name}', ${p.stock_quantity})">📦</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+  makeSortable("products-table");
+}
+
+function startInlineEdit(id, price, stock, reorder) {
+  const row = document.getElementById(`prod-row-${id}`);
+  if (!row) return;
+  document.getElementById(`prod-price-${id}`).innerHTML   = `<input type="number" class="inline-edit-input" id="ie-price-${id}" value="${price}" step="0.01" style="width:80px" />`;
+  document.getElementById(`prod-stock-${id}`).innerHTML   = `<input type="number" class="inline-edit-input" id="ie-stock-${id}" value="${stock}" min="0" style="width:70px" />`;
+  document.getElementById(`prod-reorder-${id}`).innerHTML = `<input type="number" class="inline-edit-input" id="ie-reorder-${id}" value="${reorder}" min="0" style="width:70px" />`;
+  // Replace edit button with save/cancel
+  const actCell = row.cells[row.cells.length - 1];
+  actCell.innerHTML = `
+    <div style="display:flex;gap:0.25rem">
+      <button class="btn btn-success btn-sm" onclick="saveInlineEdit(${id})">💾</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadProducts()">✕</button>
+    </div>`;
+}
+
+async function saveInlineEdit(id) {
+  const price   = parseFloat(document.getElementById(`ie-price-${id}`)?.value);
+  const stock   = parseInt(document.getElementById(`ie-stock-${id}`)?.value);
+  const reorder = parseInt(document.getElementById(`ie-reorder-${id}`)?.value);
+  if (isNaN(price) || price < 0) { showToast("Invalid price", "warning"); return; }
+  if (isNaN(stock) || stock < 0) { showToast("Invalid stock", "warning"); return; }
+  try {
+    await apiFetch(`/products/${id}`, { method: "PUT", body: JSON.stringify({ price, stock_quantity: stock, reorder_level: reorder }) });
+    showToast("Product updated successfully", "success");
+    loadProducts();
+  } catch (e) { showToast("Update failed: " + e.message, "error"); }
+}
+
+async function openAddProductModal() {
+  const categories = await apiFetch("/categories").catch(() => []);
+  const catOpts = categories.map(c => `<option value="${c.category_id}">${c.category_name}</option>`).join("");
+  openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">➕ Add Product</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Product Name *</label>
+          <input type="text" id="ap-name" class="form-control" placeholder="e.g. Wireless Mouse" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Category *</label>
+            <select id="ap-category" class="form-control"><option value="">Select category</option>${catOpts}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Price ($) *</label>
+            <input type="number" id="ap-price" class="form-control" step="0.01" placeholder="0.00" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Stock Quantity *</label>
+            <input type="number" id="ap-stock" class="form-control" value="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reorder Level *</label>
+            <input type="number" id="ap-reorder" class="form-control" value="10" min="0" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAddProduct()">💾 Add Product</button>
+      </div>
+    </div>`);
+}
+
+async function submitAddProduct() {
+  const name     = document.getElementById("ap-name")?.value.trim();
+  const catId    = parseInt(document.getElementById("ap-category")?.value);
+  const price    = parseFloat(document.getElementById("ap-price")?.value);
+  const stock    = parseInt(document.getElementById("ap-stock")?.value);
+  const reorder  = parseInt(document.getElementById("ap-reorder")?.value);
+  if (!name)          { showToast("Product name is required", "warning"); return; }
+  if (!catId)         { showToast("Please select a category", "warning"); return; }
+  if (isNaN(price) || price <= 0) { showToast("Invalid price", "warning"); return; }
+  try {
+    await apiFetch("/products", { method: "POST", body: JSON.stringify({ product_name: name, category_id: catId, price, stock_quantity: stock, reorder_level: reorder }) });
+    closeModal();
+    showToast("Product added successfully!", "success");
+    loadProducts();
+  } catch (e) { showToast("Error: " + e.message, "error"); }
+}
+
+async function openRestockModal(productId, productName, currentStock) {
+  const products = productId ? null : await apiFetch("/products").catch(() => []);
+  const prodOpts = products ? products.map(p => `<option value="${p.product_id}" data-stock="${p.stock_quantity}">${p.product_name} (stock: ${p.stock_quantity})</option>`).join("") : "";
+  openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📦 Restock Product</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        ${productId
+          ? `<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value fw-bold">${productName}</span></div>
+             <div class="detail-row"><span class="detail-label">Current Stock</span><span class="detail-value">${currentStock} units</span></div>
+             <input type="hidden" id="rs-product-id" value="${productId}" />`
+          : `<div class="form-group">
+               <label class="form-label">Product *</label>
+               <select id="rs-product-sel" class="form-control"><option value="">Select product</option>${prodOpts}</select>
+             </div>`
+        }
+        <div class="form-group">
+          <label class="form-label">Add Quantity *</label>
+          <input type="number" id="rs-qty" class="form-control" value="50" min="1" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-success" onclick="submitRestock(${productId || 0})">📦 Restock</button>
+      </div>
+    </div>`);
+}
+
+async function submitRestock(productId) {
+  const id  = productId || parseInt(document.getElementById("rs-product-sel")?.value);
+  const qty = parseInt(document.getElementById("rs-qty")?.value);
+  if (!id)  { showToast("Please select a product", "warning"); return; }
+  if (!qty || qty < 1) { showToast("Invalid quantity", "warning"); return; }
+  // Get current stock and add to it
+  const product = allProducts.find(p => p.product_id === id);
+  const newStock = (product ? product.stock_quantity : 0) + qty;
+  try {
+    await apiFetch(`/products/${id}`, { method: "PUT", body: JSON.stringify({ stock_quantity: newStock }) });
+    closeModal();
+    showToast(`Restocked! New stock: ${newStock} units`, "success");
+    loadProducts();
+  } catch (e) { showToast("Restock failed: " + e.message, "error"); }
+}
+
+async function loadDemand() {
+  const pid = document.getElementById("filter-product").value;
+  const qs  = pid ? `?product_id=${pid}` : "";
+  showSkeleton("forecast-body", 8, 6);
+  try {
+    const data      = await apiFetch("/demand" + qs);
+    const forecasts = data.forecast         || [];
+    const lowStock  = data.low_stock_alerts || [];
+
+    // Forecast chart (single product)
+    const chartWrap = document.getElementById("forecast-chart-wrap");
+    if (pid && forecasts.length) {
+      chartWrap.style.display = "block";
+      const labels    = [...forecasts].reverse().map(f => f.forecast_date);
+      const predicted = [...forecasts].reverse().map(f => parseFloat(f.predicted_demand));
+      const actual    = [...forecasts].reverse().map(f => f.actual_demand ? parseFloat(f.actual_demand) : null);
+      if (forecastChart) forecastChart.destroy();
+      forecastChart = new Chart(document.getElementById("forecastChart"), {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            { label: "Predicted", data: predicted, borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.1)", borderWidth: 2, fill: true, tension: 0.4, pointRadius: 4 },
+            { label: "Actual",    data: actual,    borderColor: "#10b981", backgroundColor: "rgba(16,185,129,0.1)", borderWidth: 2, fill: false, tension: 0.4, pointRadius: 4, spanGaps: true }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true } },
+          scales: {
+            y: { grid: { color: "rgba(51,65,85,0.6)" } },
+            x: { grid: { color: "rgba(51,65,85,0.4)" } }
+          } }
+      });
+    } else {
+      chartWrap.style.display = "none";
+    }
+
+    // Forecast table
+    document.getElementById("forecast-count").textContent = forecasts.length + " records";
+    const tbody = document.getElementById("forecast-body");
+    if (!forecasts.length) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📈</div><p>No forecast data. Select a product and run forecast.</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = forecasts.map(f => {
+      const acc = f.accuracy_pct ? parseFloat(f.accuracy_pct) : null;
+      const accClass = acc === null ? "" : acc >= 90 ? "text-green" : acc >= 75 ? "text-amber" : "text-red";
+      const isLow = f.stock_status === "REORDER NEEDED";
+      return `<tr>
+        <td class="fw-bold">${f.product_name}</td>
+        <td>${formatDate(f.forecast_date)}</td>
+        <td class="text-right">${parseFloat(f.predicted_demand).toFixed(0)}</td>
+        <td class="text-right">${f.actual_demand ? parseFloat(f.actual_demand).toFixed(0) : "—"}</td>
+        <td class="text-right ${accClass}">${acc !== null ? acc.toFixed(1) + "%" : "—"}</td>
+        <td class="text-right ${isLow ? "text-red fw-bold" : ""}">${f.stock_quantity}</td>
+        <td class="text-right">${f.reorder_level}</td>
+        <td>${isLow ? '<span class="badge badge-high">Reorder</span>' : '<span class="badge badge-success">OK</span>'}</td>
+      </tr>`;
+    }).join("");
+    makeSortable("forecast-table");
+  } catch (e) {
+    showToast("Failed to load demand data: " + e.message, "error");
+    document.getElementById("forecast-body").innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">⚠️</div><p>Error loading forecast</p></div></td></tr>';
+  }
+}
+
+// Init
+populateSelect("filter-product", "/products", "product_id", "product_name", "All Products");
+loadProducts();
+loadDemand();
+</script>
+</body>
+</html>

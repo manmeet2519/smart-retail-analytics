@@ -1,0 +1,524 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — RetailPro Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">🛒</div>
+    <span>RetailPro</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html" class="nav-link active"><span class="nav-icon">📊</span> Dashboard</a>
+    <a href="sales.html" class="nav-link"><span class="nav-icon">💰</span> Sales</a>
+    <div class="nav-section-label">Operations</div>
+    <a href="demand.html" class="nav-link"><span class="nav-icon">📦</span> Inventory</a>
+    <a href="fraud.html" class="nav-link"><span class="nav-icon">🚨</span> Fraud
+      <span class="nav-badge" id="fraud-nav-badge" style="display:none">!</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="db-status">
+      <div class="db-dot" id="db-dot"></div>
+      <span id="db-text">Checking...</span>
+    </div>
+  </div>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger">☰</button>
+      <span class="topbar-title" id="greeting">Good morning, Store Owner</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" onclick="openNewSaleModal()">
+        <span>➕</span><span>New Sale</span>
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="window.location='demand.html'">
+        <span>📦</span><span>Add Product</span>
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openAddCustomerModal()">
+        <span>👤</span><span>Add Customer</span>
+      </button>
+      <button class="btn btn-amber btn-sm" onclick="runFraudScan()">
+        <span>🔍</span><span>Fraud Scan</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h1 id="page-date">Loading...</h1>
+      <p class="subtitle">Real-time overview of your store performance</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card" style="--kpi-color:var(--accent-blue)">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Total Revenue</div>
+            <div class="kpi-value" id="kpi-revenue">—</div>
+          </div>
+          <div class="kpi-icon">💵</div>
+        </div>
+        <div class="kpi-sub">All completed sales</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-green)">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Transactions</div>
+            <div class="kpi-value" id="kpi-transactions">—</div>
+          </div>
+          <div class="kpi-icon">🧾</div>
+        </div>
+        <div class="kpi-sub">Completed orders</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-green)">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Units Sold</div>
+            <div class="kpi-value" id="kpi-units">—</div>
+          </div>
+          <div class="kpi-icon">📦</div>
+        </div>
+        <div class="kpi-sub">Total quantity</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-blue)">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Customers</div>
+            <div class="kpi-value" id="kpi-customers">—</div>
+          </div>
+          <div class="kpi-icon">👥</div>
+        </div>
+        <div class="kpi-sub">Unique buyers</div>
+      </div>
+      <div class="kpi-card clickable" style="--kpi-color:var(--accent-red)" onclick="window.location='fraud.html'">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Fraud Alerts</div>
+            <div class="kpi-value" id="kpi-fraud">—</div>
+          </div>
+          <div class="kpi-icon">🚨</div>
+        </div>
+        <div class="kpi-sub down">Click to review →</div>
+      </div>
+      <div class="kpi-card clickable" style="--kpi-color:var(--accent-amber)" onclick="window.location='demand.html'">
+        <div class="kpi-top">
+          <div>
+            <div class="kpi-label">Low Stock Items</div>
+            <div class="kpi-value" id="kpi-lowstock">—</div>
+          </div>
+          <div class="kpi-icon">⚠️</div>
+        </div>
+        <div class="kpi-sub down">Click to restock →</div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="grid-2 mb-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📈 Revenue Trend (6 months)</div>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="revenueChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏪 Store Performance</div>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="storeChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tables Row -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏆 Top 5 Products</div>
+          <a href="sales.html" class="btn btn-ghost btn-sm">View All</a>
+        </div>
+        <div class="table-wrap">
+          <table id="top-products-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Category</th>
+                <th class="text-right">Revenue</th>
+                <th class="text-right">Units</th>
+              </tr>
+            </thead>
+            <tbody id="top-products-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🕐 Recent Transactions</div>
+          <a href="sales.html" class="btn btn-ghost btn-sm">View All</a>
+        </div>
+        <div class="table-wrap">
+          <table id="recent-tx-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th class="text-right">Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="recent-tx-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="static/script.js"></script>
+<script>
+let revenueChart, storeChart;
+
+/* ── GREETING ─────────────────────────────────────────────── */
+function setGreeting() {
+  const now = new Date();
+  const h = now.getHours();
+  const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  document.getElementById("greeting").textContent = greeting + ", Store Owner";
+  document.getElementById("page-date").textContent =
+    now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+/* ── DASHBOARD DATA ───────────────────────────────────────── */
+async function loadDashboard() {
+  showSkeleton("top-products-body", 5, 5);
+  showSkeleton("recent-tx-body", 5, 5);
+  try {
+    const data = await apiFetch("/dashboard");
+    const s = data.summary || {};
+    document.getElementById("kpi-revenue").textContent      = formatCurrency(s.total_revenue);
+    document.getElementById("kpi-transactions").textContent = formatNumber(s.total_transactions);
+    document.getElementById("kpi-units").textContent        = formatNumber(s.total_units_sold);
+    document.getElementById("kpi-customers").textContent    = formatNumber(s.unique_customers);
+    document.getElementById("kpi-fraud").textContent        = formatNumber(s.fraud_alerts);
+    document.getElementById("kpi-lowstock").textContent     = formatNumber(s.low_stock_items);
+
+    // Show fraud badge in sidebar
+    if (parseInt(s.fraud_alerts) > 0) {
+      const badge = document.getElementById("fraud-nav-badge");
+      if (badge) { badge.style.display = "inline"; badge.textContent = s.fraud_alerts; }
+    }
+
+    // Revenue trend chart
+    const trend = data.monthly_trend || [];
+    if (revenueChart) revenueChart.destroy();
+    revenueChart = new Chart(document.getElementById("revenueChart"), {
+      type: "line",
+      data: {
+        labels: trend.map(r => r.month),
+        datasets: [{
+          label: "Revenue",
+          data: trend.map(r => parseFloat(r.revenue)),
+          borderColor: "#3b82f6",
+          backgroundColor: "rgba(59,130,246,0.1)",
+          borderWidth: 2, fill: true, tension: 0.4,
+          pointBackgroundColor: "#3b82f6", pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { callback: v => "$" + (v/1000).toFixed(0) + "k" }, grid: { color: "rgba(51,65,85,0.6)" } },
+          x: { grid: { color: "rgba(51,65,85,0.4)" } }
+        }
+      }
+    });
+  } catch (e) {
+    showToast("Failed to load dashboard: " + e.message, "error");
+  }
+}
+
+async function loadStoreChart() {
+  try {
+    const stores = await apiFetch("/store-performance");
+    const labels = stores.map(s => s.store_name.replace("RetailHub ", ""));
+    const revenue = stores.map(s => parseFloat(s.total_revenue));
+    const colors = ["rgba(59,130,246,0.75)","rgba(16,185,129,0.75)","rgba(245,158,11,0.75)","rgba(239,68,68,0.75)","rgba(139,92,246,0.75)"];
+    if (storeChart) storeChart.destroy();
+    storeChart = new Chart(document.getElementById("storeChart"), {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "Revenue", data: revenue, backgroundColor: colors, borderRadius: 5 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { callback: v => "$" + (v/1000).toFixed(0) + "k" }, grid: { color: "rgba(51,65,85,0.6)" } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  } catch (_) {}
+}
+
+async function loadTopProducts() {
+  try {
+    const products = await apiFetch("/top-products?limit=5");
+    const tbody = document.getElementById("top-products-body");
+    if (!products.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">📭</div><p>No product data</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = products.map((p, i) => `
+      <tr>
+        <td><span class="badge badge-info">${i+1}</span></td>
+        <td class="fw-bold truncate" style="max-width:140px">${p.product_name}</td>
+        <td class="text-muted">${p.category_name}</td>
+        <td class="text-right text-green fw-bold">${formatCurrency(p.revenue)}</td>
+        <td class="text-right">${formatNumber(p.units_sold)}</td>
+      </tr>`).join("");
+    makeSortable("top-products-table");
+  } catch (_) {}
+}
+
+async function loadRecentTransactions() {
+  try {
+    const data = await apiFetch("/transactions?per_page=5");
+    const txs = data.transactions || [];
+    const tbody = document.getElementById("recent-tx-body");
+    if (!txs.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-icon">🧾</div><p>No transactions yet</p></div></td></tr>';
+      return;
+    }
+    tbody.innerHTML = txs.map(t => `
+      <tr>
+        <td class="text-muted">#${t.transaction_id}</td>
+        <td class="truncate" style="max-width:120px">${t.customer_name}</td>
+        <td class="truncate" style="max-width:130px">${t.product_name}</td>
+        <td class="text-right fw-bold">${formatCurrency(t.total_amount)}</td>
+        <td>${statusBadge(t.status)}</td>
+      </tr>`).join("");
+    makeSortable("recent-tx-table");
+  } catch (_) {}
+}
+
+/* ── QUICK ACTIONS ────────────────────────────────────────── */
+async function openNewSaleModal() {
+  const [customers, products, stores, employees] = await Promise.all([
+    apiFetch("/customers").catch(() => []),
+    apiFetch("/products").catch(() => []),
+    apiFetch("/stores").catch(() => []),
+    apiFetch("/employees").catch(() => []),
+  ]);
+  const custOpts = customers.map(c => `<option value="${c.customer_id}">${c.name}</option>`).join("");
+  const prodOpts = products.map(p => `<option value="${p.product_id}" data-price="${p.price}">${p.product_name} ($${parseFloat(p.price).toFixed(2)})</option>`).join("");
+  const storeOpts = stores.map(s => `<option value="${s.store_id}" data-store="${s.store_id}">${s.store_name}</option>`).join("");
+  const empOpts = employees.map(e => `<option value="${e.employee_id}" data-store="${e.store_id}">${e.name} (${e.role})</option>`).join("");
+
+  openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">➕ New Transaction</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Customer *</label>
+            <select id="ns-customer" class="form-control"><option value="">Select customer</option>${custOpts}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Product *</label>
+            <select id="ns-product" class="form-control" onchange="nsFillPrice()">${prodOpts}</select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Store *</label>
+            <select id="ns-store" class="form-control" onchange="nsFilterEmployees()">${storeOpts}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Employee *</label>
+            <select id="ns-employee" class="form-control">${empOpts}</select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Quantity *</label>
+            <input type="number" id="ns-qty" class="form-control" value="1" min="1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit Price ($) *</label>
+            <input type="number" id="ns-price" class="form-control" step="0.01" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method *</label>
+          <select id="ns-payment" class="form-control">
+            <option value="cash">Cash</option>
+            <option value="credit_card">Credit Card</option>
+            <option value="debit_card">Debit Card</option>
+            <option value="online">Online</option>
+            <option value="gift_card">Gift Card</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewSale()">💾 Save Transaction</button>
+      </div>
+    </div>`);
+
+  // Store employees data for filtering
+  window._nsEmployees = employees;
+  nsFillPrice();
+  nsFilterEmployees();
+}
+
+function nsFillPrice() {
+  const sel = document.getElementById("ns-product");
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const price = opt ? opt.dataset.price : "";
+  const priceInput = document.getElementById("ns-price");
+  if (priceInput && price) priceInput.value = parseFloat(price).toFixed(2);
+}
+
+function nsFilterEmployees() {
+  const storeId = parseInt(document.getElementById("ns-store")?.value);
+  const empSel = document.getElementById("ns-employee");
+  if (!empSel || !window._nsEmployees) return;
+  const filtered = window._nsEmployees.filter(e => !storeId || e.store_id === storeId);
+  empSel.innerHTML = filtered.map(e => `<option value="${e.employee_id}">${e.name} (${e.role})</option>`).join("");
+}
+
+async function submitNewSale() {
+  const body = {
+    customer_id:    parseInt(document.getElementById("ns-customer")?.value),
+    product_id:     parseInt(document.getElementById("ns-product")?.value),
+    store_id:       parseInt(document.getElementById("ns-store")?.value),
+    employee_id:    parseInt(document.getElementById("ns-employee")?.value),
+    quantity:       parseInt(document.getElementById("ns-qty")?.value),
+    unit_price:     parseFloat(document.getElementById("ns-price")?.value),
+    payment_method: document.getElementById("ns-payment")?.value,
+  };
+  if (!body.customer_id || !body.product_id || !body.store_id || !body.employee_id) {
+    showToast("Please fill all required fields", "warning"); return;
+  }
+  if (isNaN(body.quantity) || body.quantity < 1) { showToast("Invalid quantity", "warning"); return; }
+  if (isNaN(body.unit_price) || body.unit_price <= 0) { showToast("Invalid price", "warning"); return; }
+  try {
+    const res = await apiFetch("/transactions", { method: "POST", body: JSON.stringify(body) });
+    closeModal();
+    showToast("Transaction saved! Total: " + formatCurrency(res.total_amount), "success");
+    loadDashboard(); loadRecentTransactions();
+  } catch (e) { showToast("Error: " + e.message, "error"); }
+}
+
+async function openAddCustomerModal() {
+  openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">👤 Add Customer</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Full Name *</label>
+            <input type="text" id="ac-name" class="form-control" placeholder="Jane Smith" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email *</label>
+            <input type="text" id="ac-email" class="form-control" placeholder="jane@email.com" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="text" id="ac-phone" class="form-control" placeholder="555-0100" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input type="text" id="ac-city" class="form-control" placeholder="New York" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Address</label>
+            <input type="text" id="ac-address" class="form-control" placeholder="123 Main St" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Country</label>
+            <input type="text" id="ac-country" class="form-control" value="USA" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAddCustomer()">💾 Add Customer</button>
+      </div>
+    </div>`);
+}
+
+async function submitAddCustomer() {
+  const name = document.getElementById("ac-name")?.value.trim();
+  const email = document.getElementById("ac-email")?.value.trim();
+  if (!name || !email) { showToast("Name and email are required", "warning"); return; }
+  try {
+    await apiFetch("/customers", { method: "POST", body: JSON.stringify({
+      name, email,
+      phone:   document.getElementById("ac-phone")?.value.trim(),
+      address: document.getElementById("ac-address")?.value.trim(),
+      city:    document.getElementById("ac-city")?.value.trim(),
+      country: document.getElementById("ac-country")?.value.trim() || "USA",
+    })});
+    closeModal();
+    showToast("Customer added successfully!", "success");
+    loadDashboard();
+  } catch (e) { showToast("Error: " + e.message, "error"); }
+}
+
+async function runFraudScan() {
+  const btn = document.querySelector('[onclick="runFraudScan()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span><span>Scanning...</span>'; }
+  try {
+    const res = await apiFetch("/run-fraud-detection");
+    showToast(`Fraud scan complete — ${res.new_flags_inserted} new flag(s) found`, res.new_flags_inserted > 0 ? "warning" : "success");
+    loadDashboard();
+  } catch (e) { showToast("Scan failed: " + e.message, "error"); }
+  finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span>🔍</span><span>Fraud Scan</span>'; }
+  }
+}
+
+/* ── INIT ─────────────────────────────────────────────────── */
+setGreeting();
+loadDashboard();
+loadStoreChart();
+loadTopProducts();
+loadRecentTransactions();
+</script>
+</body>
+</html>

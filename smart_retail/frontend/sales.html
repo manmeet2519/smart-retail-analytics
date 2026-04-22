@@ -1,0 +1,467 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales — RetailPro Analytics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">🛒</div>
+    <span>RetailPro</span>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Main</div>
+    <a href="index.html" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
+    <a href="sales.html" class="nav-link active"><span class="nav-icon">💰</span> Sales</a>
+    <div class="nav-section-label">Operations</div>
+    <a href="demand.html" class="nav-link"><span class="nav-icon">📦</span> Inventory</a>
+    <a href="fraud.html" class="nav-link"><span class="nav-icon">🚨</span> Fraud
+      <span class="nav-badge" id="fraud-nav-badge" style="display:none">!</span>
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="db-status">
+      <div class="db-dot" id="db-dot"></div>
+      <span id="db-text">Checking...</span>
+    </div>
+  </div>
+</aside>
+
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" id="hamburger">☰</button>
+      <span class="topbar-title">Sales & Transactions</span>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary btn-sm" onclick="openNewTransactionModal()">
+        <span>➕</span><span>New Transaction</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header">
+      <h1>💰 Sales Analytics</h1>
+      <p class="subtitle">Filter, analyze, and manage all transactions</p>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="form-group">
+        <label class="form-label">Start Date</label>
+        <input type="date" id="filter-start" class="form-control" value="2024-01-01" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Date</label>
+        <input type="date" id="filter-end" class="form-control" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Store</label>
+        <select id="filter-store" class="form-control"><option value="">All Stores</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select id="filter-category" class="form-control"><option value="">All Categories</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Search</label>
+        <input type="text" id="filter-search" class="form-control" placeholder="Customer, product..." oninput="filterTable()" />
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <label class="form-label">&nbsp;</label>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-primary" onclick="loadSales()">🔍 Apply</button>
+          <button class="btn btn-ghost" onclick="resetFilters()">↺ Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary KPIs -->
+    <div class="kpi-grid mb-2" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+      <div class="kpi-card" style="--kpi-color:var(--accent-blue)">
+        <div class="kpi-label">Revenue</div>
+        <div class="kpi-value" id="s-revenue">—</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-green)">
+        <div class="kpi-label">Transactions</div>
+        <div class="kpi-value" id="s-count">—</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-amber)">
+        <div class="kpi-label">Units Sold</div>
+        <div class="kpi-value" id="s-units">—</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:var(--accent-purple)">
+        <div class="kpi-label">Avg Transaction</div>
+        <div class="kpi-value" id="s-avg">—</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid-2 mb-2">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🍩 Revenue by Category</div>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="categoryChart"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📊 Top Products by Revenue</div>
+        </div>
+        <div class="chart-wrap" style="height:260px">
+          <canvas id="topProductsChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transactions Table -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">🧾 Transactions</div>
+        <span class="text-muted" id="tx-count-label" style="font-size:0.8rem"></span>
+      </div>
+      <div class="table-wrap">
+        <table id="sales-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Customer</th>
+              <th>Product</th>
+              <th>Category</th>
+              <th>Store</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Unit Price</th>
+              <th class="text-right">Total</th>
+              <th>Payment</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sales-body"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="sales-pagination" style="display:none">
+        <span id="pagination-info"></span>
+        <div class="pagination-btns" id="pagination-btns"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+<script src="static/script.js"></script>
+<script>
+let categoryChart, topProductsChart;
+let allTxData = [];
+let currentPage = 1;
+const PAGE_SIZE = 25;
+
+function resetFilters() {
+  document.getElementById("filter-start").value    = "2024-01-01";
+  document.getElementById("filter-end").value      = new Date().toISOString().split("T")[0];
+  document.getElementById("filter-store").value    = "";
+  document.getElementById("filter-category").value = "";
+  document.getElementById("filter-search").value   = "";
+  loadSales();
+}
+
+function filterTable() {
+  const q = document.getElementById("filter-search").value.toLowerCase();
+  const rows = document.querySelectorAll("#sales-body tr");
+  rows.forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+async function loadSales() {
+  const start    = document.getElementById("filter-start").value;
+  const end      = document.getElementById("filter-end").value || new Date().toISOString().split("T")[0];
+  const store    = document.getElementById("filter-store").value;
+  const category = document.getElementById("filter-category").value;
+  let qs = `?start_date=${start}&end_date=${end}`;
+  if (store)    qs += `&store_id=${store}`;
+  if (category) qs += `&category_id=${category}`;
+
+  showSkeleton("sales-body", 12, 8);
+  try {
+    const data = await apiFetch("/sales" + qs);
+    allTxData = data.transactions || [];
+    const cats = data.by_category || [];
+
+    // Summary stats
+    const total = allTxData.reduce((s, t) => s + parseFloat(t.total_amount), 0);
+    const units = allTxData.reduce((s, t) => s + parseInt(t.quantity), 0);
+    document.getElementById("s-revenue").textContent = formatCurrency(total);
+    document.getElementById("s-count").textContent   = formatNumber(allTxData.length);
+    document.getElementById("s-units").textContent   = formatNumber(units);
+    document.getElementById("s-avg").textContent     = allTxData.length ? formatCurrency(total / allTxData.length) : "$0.00";
+    document.getElementById("tx-count-label").textContent = allTxData.length + " records";
+
+    // Category doughnut
+    if (categoryChart) categoryChart.destroy();
+    if (cats.length) {
+      categoryChart = new Chart(document.getElementById("categoryChart"), {
+        type: "doughnut",
+        data: {
+          labels: cats.map(c => c.category_name),
+          datasets: [{ data: cats.map(c => parseFloat(c.revenue)),
+            backgroundColor: ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6"],
+            borderWidth: 2, borderColor: "#1e293b" }]
+        },
+        options: { responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: "right" },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${formatCurrency(ctx.raw)}` } } } }
+      });
+    }
+
+    // Top products bar
+    const topMap = {};
+    allTxData.forEach(t => { topMap[t.product_name] = (topMap[t.product_name] || 0) + parseFloat(t.total_amount); });
+    const sorted = Object.entries(topMap).sort((a,b) => b[1]-a[1]).slice(0,8);
+    if (topProductsChart) topProductsChart.destroy();
+    if (sorted.length) {
+      topProductsChart = new Chart(document.getElementById("topProductsChart"), {
+        type: "bar",
+        data: {
+          labels: sorted.map(([k]) => k.length > 18 ? k.slice(0,18)+"…" : k),
+          datasets: [{ label: "Revenue", data: sorted.map(([,v]) => v),
+            backgroundColor: "rgba(59,130,246,0.7)", borderRadius: 4 }]
+        },
+        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { callback: v => "$" + (v/1000).toFixed(0) + "k" }, grid: { color: "rgba(51,65,85,0.6)" } },
+            y: { grid: { display: false } }
+          } }
+      });
+    }
+
+    renderTable();
+  } catch (e) {
+    showToast("Failed to load sales: " + e.message, "error");
+    document.getElementById("sales-body").innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">⚠️</div><p>Error loading data</p></div></td></tr>';
+  }
+}
+
+function renderTable() {
+  const tbody = document.getElementById("sales-body");
+  if (!allTxData.length) {
+    tbody.innerHTML = '<tr><td colspan="12"><div class="empty-state"><div class="empty-icon">🧾</div><p>No transactions found for this filter</p></div></td></tr>';
+    document.getElementById("sales-pagination").style.display = "none";
+    return;
+  }
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = allTxData.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = page.map(t => `
+    <tr>
+      <td class="text-muted">#${t.transaction_id}</td>
+      <td>${formatDate(t.transaction_date)}</td>
+      <td class="truncate" style="max-width:120px">${t.customer_name}</td>
+      <td class="fw-bold truncate" style="max-width:130px">${t.product_name}</td>
+      <td class="text-muted">${t.category_name}</td>
+      <td class="text-muted truncate" style="max-width:110px">${t.store_name}</td>
+      <td class="text-right">${t.quantity}</td>
+      <td class="text-right">${formatCurrency(t.unit_price)}</td>
+      <td class="text-right fw-bold text-green">${formatCurrency(t.total_amount)}</td>
+      <td>${paymentBadge(t.payment_method)}</td>
+      <td>${statusBadge(t.status)}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Edit status" onclick="openEditTxModal(${t.transaction_id}, '${t.status}')">✏️</button>
+      </td>
+    </tr>`).join("");
+  makeSortable("sales-table");
+
+  // Pagination
+  const totalPages = Math.ceil(allTxData.length / PAGE_SIZE);
+  const pag = document.getElementById("sales-pagination");
+  pag.style.display = totalPages > 1 ? "flex" : "none";
+  document.getElementById("pagination-info").textContent = `Showing ${start+1}–${Math.min(start+PAGE_SIZE, allTxData.length)} of ${allTxData.length}`;
+  const btns = document.getElementById("pagination-btns");
+  btns.innerHTML = `
+    <button class="page-btn" onclick="goPage(${currentPage-1})" ${currentPage===1?"disabled":""}>‹</button>
+    ${Array.from({length:Math.min(totalPages,7)},(_,i)=>{
+      const p = i+1;
+      return `<button class="page-btn ${p===currentPage?"active":""}" onclick="goPage(${p})">${p}</button>`;
+    }).join("")}
+    <button class="page-btn" onclick="goPage(${currentPage+1})" ${currentPage===totalPages?"disabled":""}>›</button>`;
+}
+
+function goPage(p) {
+  const totalPages = Math.ceil(allTxData.length / PAGE_SIZE);
+  if (p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderTable();
+}
+
+async function openNewTransactionModal() {
+  const [customers, products, stores, employees] = await Promise.all([
+    apiFetch("/customers").catch(() => []),
+    apiFetch("/products").catch(() => []),
+    apiFetch("/stores").catch(() => []),
+    apiFetch("/employees").catch(() => []),
+  ]);
+  const custOpts  = customers.map(c => `<option value="${c.customer_id}">${c.name}</option>`).join("");
+  const prodOpts  = products.map(p => `<option value="${p.product_id}" data-price="${p.price}">${p.product_name} ($${parseFloat(p.price).toFixed(2)})</option>`).join("");
+  const storeOpts = stores.map(s => `<option value="${s.store_id}">${s.store_name}</option>`).join("");
+  const empOpts   = employees.map(e => `<option value="${e.employee_id}" data-store="${e.store_id}">${e.name} (${e.role})</option>`).join("");
+
+  openModal(`
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">➕ New Transaction</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Customer *</label>
+            <select id="nt-customer" class="form-control"><option value="">Select customer</option>${custOpts}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Product *</label>
+            <select id="nt-product" class="form-control" onchange="ntFillPrice()">${prodOpts}</select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Store *</label>
+            <select id="nt-store" class="form-control" onchange="ntFilterEmp()">${storeOpts}</select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Employee *</label>
+            <select id="nt-employee" class="form-control">${empOpts}</select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Quantity *</label>
+            <input type="number" id="nt-qty" class="form-control" value="1" min="1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unit Price ($) *</label>
+            <input type="number" id="nt-price" class="form-control" step="0.01" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Method *</label>
+          <select id="nt-payment" class="form-control">
+            <option value="cash">Cash</option>
+            <option value="credit_card">Credit Card</option>
+            <option value="debit_card">Debit Card</option>
+            <option value="online">Online</option>
+            <option value="gift_card">Gift Card</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitNewTransaction()">💾 Save Transaction</button>
+      </div>
+    </div>`);
+
+  window._ntEmployees = employees;
+  ntFillPrice();
+  ntFilterEmp();
+}
+
+function ntFillPrice() {
+  const sel = document.getElementById("nt-product");
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const inp = document.getElementById("nt-price");
+  if (inp && opt?.dataset.price) inp.value = parseFloat(opt.dataset.price).toFixed(2);
+}
+
+function ntFilterEmp() {
+  const storeId = parseInt(document.getElementById("nt-store")?.value);
+  const empSel  = document.getElementById("nt-employee");
+  if (!empSel || !window._ntEmployees) return;
+  const filtered = window._ntEmployees.filter(e => !storeId || e.store_id === storeId);
+  empSel.innerHTML = filtered.map(e => `<option value="${e.employee_id}">${e.name} (${e.role})</option>`).join("");
+}
+
+async function submitNewTransaction() {
+  const body = {
+    customer_id:    parseInt(document.getElementById("nt-customer")?.value),
+    product_id:     parseInt(document.getElementById("nt-product")?.value),
+    store_id:       parseInt(document.getElementById("nt-store")?.value),
+    employee_id:    parseInt(document.getElementById("nt-employee")?.value),
+    quantity:       parseInt(document.getElementById("nt-qty")?.value),
+    unit_price:     parseFloat(document.getElementById("nt-price")?.value),
+    payment_method: document.getElementById("nt-payment")?.value,
+  };
+  if (!body.customer_id || !body.product_id || !body.store_id || !body.employee_id) {
+    showToast("Please fill all required fields", "warning"); return;
+  }
+  if (isNaN(body.quantity) || body.quantity < 1) { showToast("Invalid quantity", "warning"); return; }
+  if (isNaN(body.unit_price) || body.unit_price <= 0) { showToast("Invalid price", "warning"); return; }
+  try {
+    const res = await apiFetch("/transactions", { method: "POST", body: JSON.stringify(body) });
+    closeModal();
+    showToast("Transaction saved! Total: " + formatCurrency(res.total_amount), "success");
+    loadSales();
+  } catch (e) { showToast("Error: " + e.message, "error"); }
+}
+
+function openEditTxModal(txId, currentStatus) {
+  openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">✏️ Update Transaction #${txId}</div>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="edit-status" class="form-control">
+            <option value="completed" ${currentStatus==="completed"?"selected":""}>Completed</option>
+            <option value="pending"   ${currentStatus==="pending"?"selected":""}>Pending</option>
+            <option value="refunded"  ${currentStatus==="refunded"?"selected":""}>Refunded</option>
+            <option value="cancelled" ${currentStatus==="cancelled"?"selected":""}>Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitEditTx(${txId})">💾 Update</button>
+      </div>
+    </div>`);
+}
+
+async function submitEditTx(txId) {
+  const status = document.getElementById("edit-status")?.value;
+  try {
+    await apiFetch(`/transactions`, { method: "POST", body: JSON.stringify({ transaction_id: txId, status }) });
+    closeModal();
+    showToast("Transaction updated", "success");
+    loadSales();
+  } catch (e) {
+    // Try PUT if POST doesn't support status update
+    try {
+      await apiFetch(`/transactions/${txId}`, { method: "PUT", body: JSON.stringify({ status }) });
+      closeModal();
+      showToast("Transaction updated", "success");
+      loadSales();
+    } catch (e2) { showToast("Update failed: " + e2.message, "error"); }
+  }
+}
+
+// Init
+document.getElementById("filter-end").value = new Date().toISOString().split("T")[0];
+populateSelect("filter-store",    "/stores",     "store_id",    "store_name",    "All Stores");
+populateSelect("filter-category", "/categories", "category_id", "category_name", "All Categories");
+loadSales();
+</script>
+</body>
+</html>
